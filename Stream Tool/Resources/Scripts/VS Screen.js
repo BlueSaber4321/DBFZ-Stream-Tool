@@ -1,144 +1,254 @@
+'use strict';
+
+// this is a weird way to have file svg's that can be recolored by css
+customElements.define("load-svg", class extends HTMLElement {
+    async connectedCallback(
+      shadowRoot = this.shadowRoot || this.attachShadow({mode:"open"})
+    ) {
+      shadowRoot.innerHTML = await (await fetch(this.getAttribute("src"))).text()
+    }
+})
 
 //animation stuff
-const pCharMove = 30; //distance to move for the character images
-
 const fadeInTime = .4; //(seconds)
 const fadeOutTime = .3;
-const introDelay = .5; //all animations will get this delay when the html loads (use this so it times with your transition)
+const introDelay = .05; //all animations will get this delay when the html loads (use this so it times with your transition)
 
 //max text sizes (used when resizing back)
-const roundSize = '54px';
-const tournamentSize = '36px';
-const casterSize = '36px';
-const twitterSize = '26px';
+const playerSize = '90px';
+const tagSize = '50px';
+const playerSizeDubs = "45px";
+const tagSizeDubs = "25px";
+const teamSize = '72px';
+const roundSize = '38px';
+const tournamentSize = '28px';
+const casterSize = '25px';
+const twitterSize = '20px';
 
 //to avoid the code constantly running the same method over and over
-let p1CharacterPrev, p1SkinPrev, p1ColorPrev;
-let p2CharacterPrev, p2SkinPrev, p2ColorPrev;
+const pCharPrev = [], pBgPrev = [], scorePrev = [], colorPrev = [];
+let bestOfPrev, gamemodePrev;
 
 //variables for the twitter/twitch constant change
-let socialInt1;
-let socialInt2;
+let socialInt1, socialInt2;
 let twitter1, twitch1, twitter2, twitch2;
 let socialSwitch = true; //true = twitter, false = twitch
-const socialInterval = 9000;
+const socialInterval = 7000;
 
+//to consider how many loops will we do
+let maxPlayers = 2; //will change when doubles comes
+const maxSides = 2;
 
 let startup = true;
 
 
-window.onload = init;
-function init() {
-	async function mainLoop() {
-		const scInfo = await getInfo();
-		getData(scInfo);
+//next, global variables for the html elements
+const pWrapper = document.getElementsByClassName("wrappers");
+const pTag = document.getElementsByClassName("tag");
+const pName = document.getElementsByClassName("name");
+const teamNames = document.getElementsByClassName("teamName");
+const pInfoProns = document.getElementsByClassName("playerInfoProns");
+const pInfoTwitter = document.getElementsByClassName("playerInfoTwitter");
+const pInfoTwitch = document.getElementsByClassName("playerInfoTwitch");
+const pInfoYt = document.getElementsByClassName("playerInfoYt");
+const pChara = document.getElementsByClassName("chara");
+const pChar = document.getElementsByClassName("char");
+const pTrail = document.getElementsByClassName("trail");
+const pBG = document.getElementsByClassName("bgVid");
+const scoreImg = document.getElementsByClassName("scoreTick");
+const colorBG = document.getElementsByClassName("colorBG");
+const textBG = document.getElementsByClassName("textBG");
+const scoreOverlay = document.getElementById("scores");
+const scoreBorder = document.getElementById("scoreBorder");
+const roundEL = document.getElementById("round");
+const tournamentEL = document.getElementById("tournament");
+const casterEL = document.getElementsByClassName("caster");
+const twitterEL = document.getElementsByClassName("twitter");
+const twitterWrEL = document.getElementsByClassName("twitterWrapper");
+const twitchEL = document.getElementsByClassName("twitch");
+const twitchWrEL = document.getElementsByClassName("twitchWrapper");
+
+
+// first we will start by connecting with the GUI with a websocket
+startWebsocket();
+function startWebsocket() {
+
+	// change this to the IP of where the GUI is being used for remote control
+	const webSocket = new WebSocket("ws://localhost:8080");
+	webSocket.onopen = () => { // if it connects successfully
+		// everything will update everytime we get data from the server (the GUI)
+		webSocket.onmessage = function (event) {
+			updateData(JSON.parse(event.data))
+		}
+		// hide error message in case it was up
+		document.getElementById('connErrorDiv').style.display = 'none';
 	}
 
-	mainLoop();
-	setInterval( () => { mainLoop(); }, 500); //update interval
+	// if the GUI closes, wait for it to reopen
+	webSocket.onclose = () => {errorWebsocket()}
+	// if connection fails for any reason
+	webSocket.onerror = () => {errorWebsocket()}
+
+}
+function errorWebsocket() {
+
+	// show error message
+	document.getElementById('connErrorDiv').style.display = 'flex';
+	// we will attempt to reconect every 5 seconds
+	setTimeout(() => {
+		startWebsocket();
+	}, 5000);
+
 }
 
+
+async function updateData(scInfo) {
+
+	const player = scInfo.player;
+	const teamName = scInfo.teamName;
+
+	const color = scInfo.color;
+	const score = scInfo.score;
+
+	const bestOf = scInfo.bestOf;
+	const gamemode = scInfo.gamemode;
+
+	const round = scInfo.round;
+	const tournamentName = scInfo.tournamentName;
+
+	const caster = scInfo.caster;
 	
-function getData(scInfo) {
-	let p1Name = scInfo['p1Name'];
-	let p1Team = scInfo['p1Team'];
-	let p1Color = scInfo['p1Color'];
-	let p1Character = scInfo['p1Character'];
-	let p1Skin = scInfo['p1Skin'];
+	twitter1 = caster[0].twitter;
+	twitch1 = caster[0].twitch;
+	twitter2 = caster[1].twitter;
+	twitch2 = caster[1].twitch;
+
+
+	// first of all, things that will always happen on each cycle
+
+	// set the max players depending on singles or doubles
+	maxPlayers = gamemode == 1 ? 2 : 4;
+
+	// depending on best of, show or hide some score ticks
+	if (bestOfPrev != bestOf) {
+		updateBo(bestOf);
+		bestOfPrev = bestOf;
+	}
+
+	// now, things that will happen for each side
+	for (let i = 0; i < maxSides; i++) {
+
+		// if there is no team name, just display "[Color] Team"
+		if (!teamName[i]) teamName[i] = color[i].name + " Team";
+
+	}
 	
-	let p2Name = scInfo['p2Name'];
-	let p2Team = scInfo['p2Team'];
-	let p2Color = scInfo['p2Color'];
-	let p2Character = scInfo['p2Character'];
-	let p2Skin = scInfo['p2Skin'];
 
-	let round = scInfo['round'];
-	let tournamentName = scInfo['tournamentName'];
-
-	let caster1 = scInfo['caster1Name'];
-	twitter1 = scInfo['caster1Twitter'];
-	twitch1 = scInfo['caster1Twitch'];
-	let caster2 = scInfo['caster2Name'];
-	twitter2 = scInfo['caster2Twitter'];
-	twitch2 = scInfo['caster2Twitch'];
-
-
-	//first, things that will happen only the first time the html loads
+	// now, things that will happen only the first time the html loads
 	if (startup) {
-		//starting with the player 1 name
-		updatePlayerName('p1Wrapper', 'p1Name', 'p1Team', p1Name, p1Team);
-		//fade in the player text
-		fadeIn("#p1Wrapper", introDelay+.15);
 
-		//same for player 2
-		updatePlayerName('p2Wrapper', 'p2Name', 'p2Team', p2Name, p2Team);
-		fadeIn("#p2Wrapper", introDelay+.15);
-
-
-		//change the player info character text
-		document.getElementById('p1CharInfo').textContent = p1Character;
-		document.getElementById('p2CharInfo').textContent = p2Character;
-		//sheik is complicated
-		if (p1Skin.includes("Sheik")) {
-			document.getElementById('p1CharInfo').textContent = "Sheik";
+		//if this isnt a singles match, rearrange stuff
+		if (gamemode != 1) {
+			changeGM(gamemode);
 		}
-		if (p2Skin.includes("Sheik")) {
-			document.getElementById('p2CharInfo').textContent = "Sheik";
+		//save this variable so we know the next time it gets changed
+		gamemodePrev = gamemode;
+		
+
+		// this will be used later to sync the animations for all character images
+		const charsLoaded = [];
+		// now the real part begins
+		for (let i = 0; i < maxPlayers; i++) {
+
+			//lets start simple with the player names & tags 
+			updatePlayerName(i, player[i].name, player[i].tag, gamemode);
+
+			//fade in the player text
+			fadeIn(pWrapper[i], introDelay+.3);
+
+
+			// now lets update all that player info
+			updatePlayerInfo(i, player[i]);
+
+			// and gradually fade them in
+			fadeIn(pInfoProns[i].parentElement, introDelay+.6);
+			fadeIn(pInfoTwitter[i].parentElement, introDelay+.75);
+			fadeIn(pInfoTwitch[i].parentElement, introDelay+.9);
+			fadeIn(pInfoYt[i].parentElement, introDelay+1.05);
+
+
+			//change the player's character image, and position it
+			charsLoaded.push(updateChar(player[i].vs, i));
+			//character will fade in when the image finishes loading
+
+			//save character info so we change them later if different
+			pCharPrev[i] = player[i].vs.charImg;
+
+
+			//set the character backgrounds
+			updateBG(pBG[i], player[i].vs.bgVid);
+			pBgPrev[i] = player[i].vs.bgVid;
+
 		}
-		//fade it in
-		fadeIn("#p1Info", introDelay+.15);
-		fadeIn("#p2Info", introDelay+.15);
+		// now we use that array from earlier to animate all characters at the same time
+		Promise.all(charsLoaded).then( (value) => { // when all images are loaded
+			for (let i = 0; i < value.length; i++) { // for every character loaded
+				charaFadeIn(value[i][0], value[i][1], introDelay); // fade it in
+			}
+		})
 
 
-		//set p1 character
-		updateChar(p1Character, p1Skin, p1Color, 'charP1', "Left");
-		//move the character
-		initCharaFade("#charaP1", -pCharMove);
-		//save character info so we change them later if different
-		p1CharacterPrev = p1Character;
-		p1SkinPrev = p1Skin;
+		// this will run for each side (so twice)
+		for (let i = 0; i < maxSides; i++) {
 
-		//same for p2
-		updateChar(p2Character, p2Skin, p2Color, 'charP2', "Right");
-		initCharaFade("#charaP2", pCharMove);
-		p2CharacterPrev = p2Character;
-		p2SkinPrev = p2Skin;
+			//update team names (if gamemode is not set to singles)
+			if (gamemode != 1) {
+				updateText(teamNames[i], teamName[i], teamSize);
+				fadeIn(teamNames[i], introDelay+.15);
+			}
+
+			//set the colors
+			updateColor(colorBG[i], textBG[i], color[i], i, gamemode);
+			colorPrev[i] = color[i].name;
+
+			//initialize the score ticks
+			updateScore(i, score[i], color[i]);
+			scorePrev[i] = score[i];
+
+		}
 
 
-		//set the colors
-		updateColor('p1Slot', p1Color);
-		updateColor('p2Slot', p2Color);
-		p1ColorPrev = p1Color;
-		p2ColorPrev = p2Color;
+		//if the scores for both sides are 0, hide the thing
+		if (score[0] == 0 && score[1] == 0) {
+			scoreOverlay.style.opacity = 0;
+		}
 
 
 		//set the round text
-		updateText("round", round, roundSize);
-
+		updateText(roundEL, round, roundSize);
 		//set the tournament text
-		updateText("tournament", tournamentName, tournamentSize);
+		updateText(tournamentEL, tournamentName, tournamentSize);
 
 
 		//set the caster info
-		updateSocialText("caster1N", caster1, casterSize, "caster1TextBox");
-		updateSocialText("caster1Tr", twitter1, twitterSize, "caster1TwitterBox");
-		updateSocialText("caster1Th", twitch1, twitterSize, "caster1TwitchBox");
-		updateSocialText("caster2N", caster2, casterSize, "caster2TextBox");
-		updateSocialText("caster2Tr", twitter2, twitterSize, "caster2TwitterBox");
-		updateSocialText("caster2Th", twitch2, twitterSize, "caster2TwitchBox");
+		for (let i = 0; i < casterEL.length; i++) {
+			updateText(casterEL[i], caster[i].name, casterSize);
+			updateSocialText(twitterEL[i], caster[i].twitter, twitterSize, twitterWrEL[i]);
+			updateSocialText(twitchEL[i], caster[i].twitch, twitterSize, twitchWrEL[i]);
+		
+			//setup twitter/twitch change
+			socialChange1(twitterWrEL[i], twitchWrEL[i]);
+		}
 
-		//setup twitter/twitch change
-		socialChange1("caster1TwitterBox", "caster1TwitchBox");
-		socialChange2("caster2TwitterBox", "caster2TwitchBox");
 		//set an interval to keep changing the names
 		socialInt1 = setInterval( () => {
-			socialChange1("caster1TwitterBox", "caster1TwitchBox");
+			socialChange1(twitterWrEL[0], twitchWrEL[0]);
 		}, socialInterval);
-		socialInt2 = setInterval(() => {
-			socialChange2("caster2TwitterBox", "caster2TwitchBox");
+		socialInt2 = setInterval( () => {
+			socialChange2(twitterWrEL[1], twitchWrEL[1]);
 		}, socialInterval);
 
-		//keep changing this boolean for the previous intervals ()
+		//keep changing this boolean for the previous intervals
 		setInterval(() => {
 			if (socialSwitch) { //true = twitter, false = twitch
 				socialSwitch = false;
@@ -147,234 +257,382 @@ function getData(scInfo) {
 			}
 		}, socialInterval);
 
-		//if a caster has no name, hide its icon
-		if (caster1 == "") {
-			document.getElementById('caster1TextBox').style.opacity = 0;
-		}
-		if (caster2 == "") {
-			document.getElementById('caster2TextBox').style.opacity = 0;
-		}
-
 
 		startup = false; //next time we run this function, it will skip all we just did
 	}
 
-	//now things that will happen constantly
+	// now things that will happen every other cycle
 	else {
 
-		//player 1 name change
-		if (document.getElementById('p1Name').textContent != p1Name ||
-			document.getElementById('p1Team').textContent != p1Team) {
-			//fade out player 1 text
-			fadeOut("#p1Wrapper", () => {
-				//now that nobody is seeing it, change the text content!
-				updatePlayerName('p1Wrapper', 'p1Name', 'p1Team', p1Name, p1Team);
-				//and fade the name back in
-				fadeIn("#p1Wrapper", .2);
-			});
-		}
-
-		//same for player 2
-		if (document.getElementById('p2Name').textContent != p2Name ||
-			document.getElementById('p2Team').textContent != p2Team){
-			fadeOut("#p2Wrapper", () => {
-				updatePlayerName('p2Wrapper', 'p2Name', 'p2Team', p2Name, p2Team);
-				fadeIn("#p2Wrapper", .2);
-			});
-		}
-
-
-		//player 1 character and skin
-		if (p1CharacterPrev != p1Character || p1SkinPrev != p1Skin) {
-
-			//move and fade out the character
-			charaFadeOut("#charaP1", -pCharMove, async () => {
-				//update the character image
-				await updateChar(p1Character, p1Skin, p1Color, 'charP1', "Left");
-				//move and fade them back
-				charaFadeIn("#charaP1");
-			});
-
-			//change the player info text if the character is different or if changing between Zelda and Sheik
-			if (p1CharacterPrev != p1Character ||
-				(p1CharacterPrev == "Zelda" && p1Skin.includes("Sheik")) ||
-				(p1Character == "Zelda" && p1SkinPrev.includes("Sheik"))) {
-				fadeOut('#p1Info', () => {
-					document.getElementById('p1CharInfo').textContent = p1Character;
-					//sheik is complicated
-					if (p1Skin.includes("Sheik")) {
-						document.getElementById('p1CharInfo').textContent = "Sheik";
-					}
-					fadeIn('#p1Info');
-				});
+		//of course, check if the gamemode has changed
+		if (gamemodePrev != gamemode) {
+			changeGM(gamemode);	
+			//calling updateColor here so the text background gets added
+			for (let i = 0; i < maxSides; i++) {
+				updateColor(colorBG[i], textBG[i], color[i], i, gamemode);
 			}
-			
-			p1CharacterPrev = p1Character;
-			p1SkinPrev = p1Skin;
+			gamemodePrev = gamemode;
 		}
 
-		//same for player 2
-		if (p2CharacterPrev != p2Character || p2SkinPrev != p2Skin) {
-			charaFadeOut("#charaP2", pCharMove, async () => {
-				await updateChar(p2Character, p2Skin, p2Color, 'charP2', "Right");
-				charaFadeIn("#charaP2");
-			});
 
-			if (p2CharacterPrev != p2Character ||
-				(p2CharacterPrev == "Zelda" && p2Skin.includes("Sheik")) ||
-				(p2Character == "Zelda" && p2SkinPrev.includes("Sheik"))) {
-				fadeOut('#p2Info', () => {
-					document.getElementById('p2CharInfo').textContent = p2Character;
-					if (p2Skin.includes("Sheik")) {
-						document.getElementById('p2CharInfo').textContent = "Sheik";
-					}
-					fadeIn('#p2Info');
-				});
+		for (let i = 0; i < maxSides; i++) {
+
+			//color change, this is up here before char/skin change so it doesnt change the
+			//trail to the next one if the character has changed, but it will change its color
+			if (colorPrev[i] != color[i].name) {
+				updateColor(colorBG[i], textBG[i], color[i], i, gamemode);
+				colorTrail(pTrail[i], player[i]);
+				//if this is doubles, we also need to change the colors for players 3 and 4
+				if (gamemode == 2) {
+					colorTrail(pTrail[i+2], player[i+2]);
+				}
+				updateScore(i, score[i], color[i]);
+				colorPrev[i] = color[i].name;
 			}
+
+			//check if the scores changed
+			if (scorePrev[i] != score[i]) {
+
+				//update the thing
+				updateScore(i, score[i], color[i]);
+
+				//if the scores for both sides are 0, hide the thing
+				if (score[0] == 0 && score[1] == 0) {
+					fadeOut(scoreOverlay);
+				} else {
+					fadeIn(scoreOverlay);
+				}
+
+				scorePrev[i] = score[i];
+
+			}
+
+			//did any of the team names change?
+			if (gamemode != 1) {
+				if (teamNames[i].textContent != teamName[i]) {
+					//hide the text before doing anything
+					fadeOut(teamNames[i]).then( () => {
+						//update the text while nobody can see it
+						updateText(teamNames[i], teamName[i], teamSize);
+						//and fade it back to normal
+						fadeIn(teamNames[i]);
+					});
+				}
+			}
+
+		}
+
+
+		// this will be used later to sync the animations for all character images
+		const charsLoaded = [], animsEnded = [];
+		for (let i = 0; i < maxPlayers; i++) {
+
+			// players name change, if either name or tag have changed
+			if (pName[i].textContent != player[i].name || pTag[i].textContent != player[i].tag) {
+				//fade out the player's text
+				fadeOut(pWrapper[i]).then( () => {
+					//now that nobody is seeing it, change the content of the texts!
+					updatePlayerName(i, player[i].name, player[i].tag, gamemode);
+					//and fade the texts back in
+					fadeIn(pWrapper[i], .2);
+				});
+			};
+
+			// all that player info must be updated!
+			if (pInfoProns[i].textContent != player[i].pronouns ||
+				pInfoTwitter[i].textContent != player[i].twitter ||
+				pInfoTwitch[i].textContent != player[i].twitch ||
+				pInfoYt[i].textContent != player[i].yt) {
+
+				// fade all of them out, we only need to wait for one
+				fadeOut(pInfoProns[i].parentElement);
+				fadeOut(pInfoTwitter[i].parentElement);
+				fadeOut(pInfoTwitch[i].parentElement);
+				fadeOut(pInfoYt[i].parentElement).then( () => {
+					// update the texts!
+					updatePlayerInfo(i, player[i]);
+					// but woudnt it be cool if we faded all of them with progression
+					fadeIn(pInfoProns[i].parentElement, .2);
+					fadeIn(pInfoTwitter[i].parentElement, .35);
+					fadeIn(pInfoTwitch[i].parentElement, .5);
+					fadeIn(pInfoYt[i].parentElement, .65);
+				});
+				
+			}
+
+			// player character change
+			if (pCharPrev[i] != player[i].vs.charImg) {
+				
+				//move and fade out the character
+				animsEnded.push(charaFadeOut(pChara[i], pTrail[i]).then( () => {
+					//update the character image and trail, and also storing its scale for later
+					charsLoaded.push(updateChar(player[i].vs, i));
+					//will fade back in when the images load
+				}));
+				
+				pCharPrev[i] = player[i].vs.charImg;
+
+			}
+
+			// background change here!
+			if (pBgPrev[i] != player[i].vs.bgVid) {
+				//fade it out
+				fadeOut(pBG[i], fadeOutTime+.2).then( () => {
+					//update the bg vid
+					updateBG(pBG[i], player[i].vs.bgVid);
+					//fade it back
+					fadeIn(pBG[i], .3, fadeInTime+.2);
+				});
+				pBgPrev[i] = player[i].vs.bgVid;
+			}
+
+		}
+		// now we use that array from earlier to animate all characters at the same time
+		Promise.all(animsEnded).then( () => { // need to sync somehow
+			Promise.all(charsLoaded).then( (value) => { // when all images are loaded
+				for (let i = 0; i < value.length; i++) { // for every character loaded
+					charaFadeIn(value[i][0], value[i][1]); // fade it in
+				}
+			})
+		})
 		
-			p2CharacterPrev = p2Character;
-			p2SkinPrev = p2Skin;
-		}
-
-
-		//color change
-		if (p1ColorPrev != p1Color) {
-			fadeOut('#p1Slot', () => {
-				updateColor('p1Slot', p1Color);
-				fadeIn('#p1Slot');
-			});
-			p1ColorPrev = p1Color;
-		}
-
-		if (p2ColorPrev != p2Color) {
-			fadeOut('#p2Slot', () => {
-				updateColor('p2Slot', p2Color);
-				fadeIn('#p2Slot');
-			});
-			p2ColorPrev = p2Color;
-		}
-
 
 		//update round text
-		if (document.getElementById('round').textContent != round){
-			fadeOut("#round", () => {
-				updateText("round", round, roundSize);
-				fadeIn("#round", .2);
+		if (roundEL.textContent != round){
+			fadeOut(roundEL).then( () => {
+				updateText(roundEL, round, roundSize);
+				fadeIn(roundEL, .2);
 			});
 		}
 
 		//update tournament text
-		if (document.getElementById('tournament').textContent != tournamentName){
-			fadeOut("#tournament", () => {
-				updateText("tournament", tournamentName, tournamentSize);
-				fadeIn("#tournament", .2);
+		if (tournamentEL.textContent != tournamentName){
+			fadeOut(tournamentEL).then( () => {
+				updateText(tournamentEL, tournamentName, tournamentSize);
+				fadeIn(tournamentEL, .2);
 			});
 		}
 
 
-		//update caster 1 info
-		if (document.getElementById('caster1N').textContent != caster1){
-			fadeOut("#caster1TextBox", () => {
-				updateSocialText("caster1N", caster1, casterSize, 'caster1TextBox');
-				//if no caster name, dont fade in the caster icon
-				if (caster1 != "") {
-					fadeIn("#caster1TextBox", .2);
-				}
-			});
-		}
-		//caster 1's twitter
-		if (document.getElementById('caster1Tr').textContent != twitter1){
-			updateSocial(twitter1, "caster1Tr", "caster1TwitterBox", twitch1, "caster1TwitchBox");
-		}
-		//caster 2's twitch (same as above)
-		if (document.getElementById('caster1Th').textContent != twitch1){
-			updateSocial(twitch1, "caster1Th", "caster1TwitchBox", twitter1, "caster1TwitterBox");
-		}
+		//update caster info
+		for (let i = 0; i < casterEL.length; i++) {
+			
+			//caster names
+			if (casterEL[i].textContent != caster[i].name){
+				fadeOut(casterEL[i]).then( () => {
+					updateText(casterEL[i], caster[i].name, casterSize);
+					fadeIn(casterEL[i], .2);
+				});
+			}
 
-		//caster 2, same as above
-		if (document.getElementById('caster2N').textContent != caster2){
-			fadeOut("#caster2TextBox", () => {
-				updateSocialText("caster2N", caster2, casterSize, 'caster2TextBox');
-				if (caster2 != "") {
-					fadeIn("#caster2TextBox", .2);
-				}
-			});
-		}
-		if (document.getElementById('caster2Tr').textContent != twitter2){
-			updateSocial(twitter2, "caster2Tr", "caster2TwitterBox", twitch2, "caster2TwitchBox");
-		}
+			//caster twitters
+			if (twitterEL[i].textContent != caster[i].twitter){
+				updateSocial(caster[i].twitter, twitterEL[i], twitterWrEL[i], caster[i].twitch, twitchWrEL[i]);
+			}
 
-		if (document.getElementById('caster2Th').textContent != twitch2){
-			updateSocial(twitch2, "caster2Th", "caster2TwitchBox", twitter2, "caster2TwitterBox");
+			//caster twitchers
+			if (twitchEL[i].textContent != caster[i].twitch){
+				updateSocial(caster[i].twitch, twitchEL[i], twitchWrEL[i], caster[i].twitter, twitterWrEL[i]);
+			}
+
 		}
 	}
 }
 
 
-//did an image fail to load? this will be used to show nothing
-function showNothing(itemEL) {
-	itemEL.setAttribute('src', 'Resources/Literally Nothing.png');
+// the gamemode manager
+function changeGM(gm) {
+	if (gm == 2) {
+
+		//change the white overlay
+		document.getElementById("vsOverlay").src = "Resources/Overlay/VS Screen/VS Overlay Dubs.png";
+
+		//make all the extra doubles elements visible
+		const dubELs = document.getElementsByClassName("dubEL");
+		for (let i = 0; i < dubELs.length; i++) {
+			dubELs[i].style.display = "flex";
+		}
+
+		//change the positions for the text backgrounds (will now be used for the team names)
+		for (let i = 0; i < maxSides; i++) {
+			textBG[i].style.bottom = "477px";
+		}
+		textBG[1].style.right = "-10px";
+
+		//move the match info to the center of the screen
+		document.getElementById("roundInfo").style.top = "434px";
+		document.getElementById("casterInfo").style.top = "417px";
+		document.getElementById("scores").style.top = "415px";
+
+		//reposition the top characters (bot ones are already positioned)
+		document.getElementById("topRow").style.top = "-180px";
+		//change the clip mask
+		document.getElementById("clipP1").classList.remove("singlesClip");
+		document.getElementById("clipP1").classList.add("dubsClip");
+		document.getElementById("clipP2").classList.remove("singlesClip");
+		document.getElementById("clipP2").classList.add("dubsClip");
+		
+		// lastly, change the positions for the player texts
+		for (let i = 0; i < 2; i++) {
+			pWrapper[i].classList.remove("wrappersSingles");
+			pWrapper[i].classList.add("wrappersDoubles");
+			pWrapper[i].classList.remove("p"+(i+1)+"WSingles");
+			pWrapper[i].classList.add("p"+(i+1)+"WDub");
+			//update the text size and resize it if it overflows
+			pName[i].style.fontSize = playerSizeDubs;
+			pTag[i].style.fontSize = tagSizeDubs;
+			resizeText(pWrapper[i]);
+		};
+
+		// player info positions
+		const pInfo1 = document.getElementById("playerInfoDivL");
+		pInfo1.classList.remove("playerInfoDiv", "playerInfoDivL");
+		pInfo1.classList.add("playerInfoDiv2", "playerInfoDivL1");
+		const pInfos1 = pInfo1.getElementsByClassName("playerInfo");
+		for (let i = 0; i < pInfos1.length; i++) {
+			pInfos1[i].classList.add("playerInfo1L");
+		};
+
+		const pInfo2 = document.getElementById("playerInfoDivR");
+		pInfo2.classList.remove("playerInfoDiv", "playerInfoDivR");
+		pInfo2.classList.add("playerInfoDiv2", "playerInfoDivR1");
+		const pInfos2 = pInfo2.getElementsByClassName("playerInfo");
+		for (let i = 0; i < pInfos2.length; i++) {
+			pInfos2[i].classList.add("playerInfo1R");
+		};
+
+	} else {
+
+		document.getElementById("vsOverlay").src = "Resources/Overlay/VS Screen/VS Overlay.png";
+
+		//hide the extra elements
+		const dubELs = document.getElementsByClassName("dubEL");
+		for (let i = 0; i < dubELs.length; i++) {
+			dubELs[i].style.display = "none";
+		}
+
+		//move everything back to where it was
+		for (let i = 0; i < maxSides; i++) {
+			textBG[i].style.bottom = "0px";
+		}
+		textBG[1].style.right = "-2px";
+		document.getElementById("roundInfo").style.top = "0px";
+		document.getElementById("casterInfo").style.top = "0px";
+		document.getElementById("scores").style.top = "0px";
+		document.getElementById("topRow").style.top = "0px";
+		document.getElementById("clipP1").classList.remove("dubsClip");
+		document.getElementById("clipP1").classList.add("singlesClip");
+		document.getElementById("clipP2").classList.remove("dubsClip");
+		document.getElementById("clipP2").classList.add("singlesClip");
+		for (let i = 0; i < 2; i++) {
+			pWrapper[i].classList.remove("wrappersDoubles");
+			pWrapper[i].classList.add("wrappersSingles");
+			pWrapper[i].classList.remove("p"+(i+1)+"WDub");
+			pWrapper[i].classList.add("p"+(i+1)+"WSingles");
+			updatePlayerName(i, "", "", gm); //resize didnt do anything here for some reason
+		}
+
+		const pInfo1 = document.getElementById("playerInfoDivL");
+		pInfo1.classList.add("playerInfoDiv", "playerInfoDivL");
+		pInfo1.classList.remove("playerInfoDiv2", "playerInfoDivL1");
+		const pInfos1 = pInfo1.getElementsByClassName("playerInfo");
+		for (let i = 0; i < pInfos1.length; i++) {
+			pInfos1[i].classList.remove("playerInfo1L");
+		};
+
+		const pInfo2 = document.getElementById("playerInfoDivR");
+		pInfo2.classList.add("playerInfoDiv", "playerInfoDivR");
+		pInfo2.classList.remove("playerInfoDiv2", "playerInfoDivR1");
+		const pInfos2 = pInfo2.getElementsByClassName("playerInfo");
+		for (let i = 0; i < pInfos2.length; i++) {
+			pInfos2[i].classList.remove("playerInfo1R");
+		};
+		
+	}
+
 }
+
+
+//score change, pretty simple
+function updateScore(side, pScore, pColor) {
+
+	//if this is the right side, change the number
+	if (side == 1) {
+		side = 3;
+	}
+
+	if (pScore == 0) {
+		scoreImg[side].style.fill = "#414141";
+		scoreImg[side+1].style.fill = "#414141";
+		scoreImg[side+2].style.fill = "#414141";
+	} else if (pScore == 1) {
+		scoreImg[side].style.fill = pColor.hex;
+		scoreImg[side+1].style.fill = "#414141";
+		scoreImg[side+2].style.fill = "#414141";
+	} else if (pScore == 2) {
+		scoreImg[side].style.fill = pColor.hex;
+		scoreImg[side+1].style.fill = pColor.hex;
+		scoreImg[side+2].style.fill = "#414141";
+	} else if (pScore == 3) {
+		scoreImg[side].style.fill = pColor.hex;
+		scoreImg[side+1].style.fill = pColor.hex;
+		scoreImg[side+2].style.fill = pColor.hex;
+	}
+}
+
 
 //color change
-function updateColor(pSlotID, color) {
-	const pSlotEL = document.getElementById(pSlotID);
-	pSlotEL.style.color = getHexColor(color);
+function updateColor(gradEL, textBGEL, color, i, gamemode) {
 
-	switch (color) {
-		case "Red":
-			return "#fd3232";
-		case "Blue":
-			return "#2985f5";
-		case "Yellow":
-			return "#febc0d";	
-		case "Green":
-			return "#21b546";
-		case "Orange":
-			return "#f88632";	
-		case "Cyan":
-			return "#26cae2";
-		case "Pink":
-			return "#fe9bb5";
-		case "Purple":
-			return "#9570fe";
-		case "CPU":
-			return "#ACACAC";
-		case "Amiibo":
-			return "#87FFCD";
+	//change the color gradient image path depending on the color
+	gradEL.src = `Resources/Overlay/VS Screen/Grads/${color.name}.png`;
+
+	//same but with the text background
+	textBGEL.src = `Resources/Overlay/VS Screen/Text BGs/${gamemode}/${color.name}.png`;
+	
+	// update the root css color variable
+	const r = document.querySelector(':root');
+	if (i % 2 == 0) {
+		r.style.setProperty("--colorL", color.hex);
+	} else {
+		r.style.setProperty("--colorR", color.hex);
+	}
+
+	// if 2v2, add a background to the name wrapper
+	if (gamemode == 2) {
+		pWrapper[i].style.backgroundColor = `${color.hex}ff`;
+		pWrapper[i+2].style.backgroundColor = `${color.hex}ff`;
+	} else {
+		pWrapper[i].style.backgroundColor = "";
+		pWrapper[i+2].style.backgroundColor = "";
+	}
+
+}
+
+
+//background change
+function updateBG(vidEL, vidSrc) {
+	// well this used to be more complicated than this
+	vidEL.src = vidSrc;
+}
+
+
+// to hide some score ticks and change score border
+function updateBo(bestOf) {
+	if (bestOf == "Bo5") {
+		scoreImg[2].style.opacity = 1;
+		scoreImg[5].style.opacity = 1;
+		scoreBorder.src = "Resources/Overlay/VS Screen/Score Border Bo5.png";
+	} else {
+		scoreImg[2].style.opacity = 0;
+		scoreImg[5].style.opacity = 0;
+		scoreBorder.src = "Resources/Overlay/VS Screen/Score Border Bo3.png";
 	}
 }
-//color codes here!
-function getHexColor(color) {
-	switch (color) {
-		case "Red":
-			return "#fd3232";
-		case "Blue":
-			return "#2985f5";
-		case "Yellow":
-			return "#febc0d";	
-		case "Green":
-			return "#21b546";
-		case "Orange":
-			return "#f88632";	
-		case "Cyan":
-			return "#26cae2";
-		case "Pink":
-			return "#fe9bb5";
-		case "Purple":
-			return "#9570fe";
-		case "CPU":
-			return "#ACACAC";
-		case "Amiibo":
-			return "#87FFCD";
-	}
-}
+
 
 //the logic behind the twitter/twitch constant change
-function socialChange1(twitterWrapperID, twitchWrapperID) {
-
-	const twitterWrapperEL = document.getElementById(twitterWrapperID);
-	const twitchWrapperEL = document.getElementById(twitchWrapperID);
+function socialChange1(twitterWrapperEL, twitchWrapperEL) {
 
 	if (startup) {
 
@@ -394,22 +652,19 @@ function socialChange1(twitterWrapperID, twitchWrapperID) {
 	} else if (!!twitter1 && !!twitch1) {
 
 		if (socialSwitch) {
-			fadeOut(twitterWrapperEL, () => {
-				fadeIn(twitchWrapperEL, 0);
+			fadeOut(twitterWrapperEL).then( () => {
+				fadeIn(twitchWrapperEL);
 			});
 		} else {
-			fadeOut(twitchWrapperEL, () => {
-				fadeIn(twitterWrapperEL, 0);
+			fadeOut(twitchWrapperEL).then( () => {
+				fadeIn(twitterWrapperEL);
 			});
 		}
 
 	}
 }
 //i didnt know how to make it a single function im sorry ;_;
-function socialChange2(twitterWrapperID, twitchWrapperID) {
-
-	const twitterWrapperEL = document.getElementById(twitterWrapperID);
-	const twitchWrapperEL = document.getElementById(twitchWrapperID);
+function socialChange2(twitterWrapperEL, twitchWrapperEL) {
 
 	if (startup) {
 
@@ -427,77 +682,110 @@ function socialChange2(twitterWrapperID, twitchWrapperID) {
 	} else if (!!twitter2 && !!twitch2) {
 
 		if (socialSwitch) {
-			fadeOut(twitterWrapperEL, () => {
-				fadeIn(twitchWrapperEL, 0);
+			fadeOut(twitterWrapperEL).then( () => {
+				fadeIn(twitchWrapperEL);
 			});
 		} else {
-			fadeOut(twitchWrapperEL, () => {
-				fadeIn(twitterWrapperEL, 0);
+			fadeOut(twitchWrapperEL).then( () => {
+				fadeIn(twitterWrapperEL);
 			});
 		}
 
 	}
 }
 //function to decide when to change to what
-function updateSocial(mainSocial, mainText, mainBox, otherSocial, otherBox) {
+function updateSocial(mainSocial, mainText, mainWrapper, otherSocial, otherWrapper) {
 	//check if this is for twitch or twitter
 	let localSwitch = socialSwitch;
-	if (mainText == "caster1Th" || mainText == "caster2Th") {
+	if (mainText == twitchEL[0] || mainText == twitchEL[1]) {
 		localSwitch = !localSwitch;
 	}
 	//check if this is their turn so we fade out the other one
 	if (localSwitch) {
-		fadeOut("#"+otherBox, () => {})
+		fadeOut(otherWrapper)
 	}
 
 	//now do the classics
-	fadeOut("#"+mainBox, () => {
-		updateSocialText(mainText, mainSocial, twitterSize, mainBox);
+	fadeOut(mainWrapper).then( () => {
+		updateSocialText(mainText, mainSocial, twitterSize, mainWrapper);
 		//check if its twitter's turn to show up
 		if (otherSocial == "" && mainSocial != "") {
-			fadeIn("#"+mainBox, .2);
+			fadeIn(mainWrapper, .2);
 		} else if (localSwitch && mainSocial != "") {
-			fadeIn("#"+mainBox, .2);
+			fadeIn(mainWrapper, .2);
 		} else if (otherSocial != "") {
-			fadeIn("#"+otherBox, .2);
+			fadeIn(otherWrapper, .2);
 		}
 	});
 }
 
-//player text change
-function updatePlayerName(wrapperID, nameID, teamID, pName, pTeam) {
-	const nameEL = document.getElementById(nameID);
-	nameEL.style.fontSize = '80px'; //set original text size
-	nameEL.textContent = pName; //change the actual text
-	const teamEL = document.getElementById(teamID);
-	teamEL.style.fontSize = '40px';
-	teamEL.textContent = pTeam;
 
-	resizeText(document.getElementById(wrapperID)); //resize if it overflows
+//player text change
+function updatePlayerName(pNum, name, tag, gamemode = 1) {
+	if (gamemode == 2) {
+		pName[pNum].style.fontSize = playerSizeDubs; //set original text size
+		pTag[pNum].style.fontSize = tagSizeDubs;
+	} else {
+		pName[pNum].style.fontSize = playerSize;
+		pTag[pNum].style.fontSize = tagSize;
+	}
+	pName[pNum].textContent = name; //change the actual text
+	pTag[pNum].textContent = tag;
+
+	resizeText(pWrapper[pNum]); //resize if it overflows
+}
+
+// player info change
+function updatePlayerInfo(pNum, pInfo) {
+	
+	pInfoProns[pNum].innerText = pInfo.pronouns;
+	pInfoTwitter[pNum].innerText = pInfo.twitter;
+	pInfoTwitch[pNum].innerText = pInfo.twitch;
+	pInfoYt[pNum].innerText = pInfo.yt;
+
+	// there must be a cleaner way to do this right?
+	if (pInfo.pronouns) {
+		pInfoProns[pNum].parentElement.style.display = "block";
+	} else {
+		pInfoProns[pNum].parentElement.style.display = "none";
+	}
+	if (pInfo.twitter) {
+		pInfoTwitter[pNum].parentElement.style.display = "block";
+	} else {
+		pInfoTwitter[pNum].parentElement.style.display = "none";
+	}
+	if (pInfo.twitch) {
+		pInfoTwitch[pNum].parentElement.style.display = "block";
+	} else {
+		pInfoTwitch[pNum].parentElement.style.display = "none";
+	}
+	if (pInfo.yt) {
+		pInfoYt[pNum].parentElement.style.display = "block";
+	} else {
+		pInfoYt[pNum].parentElement.style.display = "none";
+	}
+
 }
 
 //generic text changer
-function updateText(textID, textToType, maxSize) {
-	const textEL = document.getElementById(textID);
+function updateText(textEL, textToType, maxSize) {
 	textEL.style.fontSize = maxSize; //set original text size
 	textEL.textContent = textToType; //change the actual text
 	resizeText(textEL); //resize it if it overflows
 }
 //social text changer
-function updateSocialText(textID, textToType, maxSize, wrapper) {
-	const textEL = document.getElementById(textID);
+function updateSocialText(textEL, textToType, maxSize, wrapperEL) {
 	textEL.style.fontSize = maxSize; //set original text size
 	textEL.textContent = textToType; //change the actual text
-	const wrapperEL = document.getElementById(wrapper)
 	resizeText(wrapperEL); //resize it if it overflows
 }
 
 //text resize, keeps making the text smaller until it fits
 function resizeText(textEL) {
 	const childrens = textEL.children;
-	while (textEL.scrollWidth > textEL.offsetWidth || textEL.scrollHeight > textEL.offsetHeight) {
-		if (childrens.length > 0) { //for team+player texts
-			Array.from(childrens).forEach(function (child) {
+	while (textEL.scrollWidth > textEL.offsetWidth) {
+		if (childrens.length > 0) { //for tag+player texts
+			Array.from(childrens).forEach((child) => {
 				child.style.fontSize = getFontSize(child);
 			});
 		} else {
@@ -505,106 +793,87 @@ function resizeText(textEL) {
 		}
 	}
 }
-
 //returns a smaller fontSize for the given element
 function getFontSize(textElement) {
 	return (parseFloat(textElement.style.fontSize.slice(0, -2)) * .90) + 'px';
 }
 
+
 //fade out
-function fadeOut(itemID, funct = console.log("Hola!"), dur = fadeOutTime) {
-	gsap.to(itemID, {opacity: 0, duration: dur, onComplete: funct});
+async function fadeOut(itemID, dur = fadeOutTime) {
+	itemID.style.animation = `fadeOut ${dur}s both`;
+	// this function will return a promise when the animation ends
+	await new Promise(resolve => setTimeout(resolve, dur * 1000)); // translate to miliseconds
 }
 
 //fade in
-function fadeIn(itemID, timeDelay, dur = fadeInTime) {
-	gsap.to(itemID, {delay: timeDelay, opacity: 1, duration: dur});
+function fadeIn(itemID, delay = 0, dur = fadeInTime) {
+	itemID.style.animation = `fadeIn ${dur}s ${delay}s both`;
 }
 
 //fade out for the characters
-function charaFadeOut(itemID, charMove, funct) {
-	gsap.to(itemID, {delay: .2, x: charMove, opacity: 0, ease: "power1.in", duration: fadeOutTime, onComplete: funct});
+async function charaFadeOut(charaEL, trailEL) {
+
+	charaEL.style.animation = `charaMoveOut ${fadeOutTime}s both
+		,fadeOut ${fadeOutTime}s both`
+	;
+	// this is only so the animation change gets activated on fade in
+	trailEL.parentElement.style.animation = `trailMoveOut 0s both`;
+
+	await new Promise(resolve => setTimeout(resolve, fadeOutTime * 1000));
+
 }
 
 //fade in characters edition
-function charaFadeIn(charaID) {
-	gsap.to(charaID, {delay: .3, x: 0, opacity: 1, ease: "power2.out", duration: fadeInTime+.1});
+function charaFadeIn(charaEL, trailEL, delay = 0) {
+	charaEL.style.animation = `charaMoveIn ${fadeInTime + .1}s ${delay + .2}s both
+		, fadeIn ${fadeInTime + .1}s ${delay + .2}s both`
+	;
+	trailEL.parentElement.style.animation = `trailMoveIn ${fadeInTime + .1}s ${delay + .4}s both
+		, fadeIn ${fadeInTime + .1}s ${delay + .4}s both`
+	;
 }
 
-//initial characters fade in
-function initCharaFade(charaID, charMove) {
-	gsap.fromTo(charaID,
-		{x: charMove, opacity: 0},
-		{delay: introDelay, x: 0, opacity: 1, ease: "power2.out", duration: fadeInTime});
-	}
-
-//searches for the main json file
-function getInfo() {
-	return new Promise(function (resolve) {
-		const oReq = new XMLHttpRequest();
-		oReq.addEventListener("load", reqListener);
-		oReq.open("GET", 'Resources/Texts/ScoreboardInfo.json');
-		oReq.send();
-
-		//will trigger when file loads
-		function reqListener () {
-			resolve(JSON.parse(oReq.responseText))
-		}
-	})
-	//i would gladly have used fetch, but OBS local files wont support that :(
-}
-
-//searches for a json file with character data
-function getCharInfo(pCharacter) {
-	return new Promise(function (resolve) {
-		const oReq = new XMLHttpRequest();
-		oReq.addEventListener("load", reqListener);
-		oReq.onerror = () => {resolve("notFound")}; //for obs local file browser sources
-		oReq.open("GET", 'Resources/Texts/Character Info/' + pCharacter + '.json');
-		oReq.send();
-
-		function reqListener () {
-			try {resolve(JSON.parse(oReq.responseText))}
-			catch {resolve("notFound")} //for live servers
-		}
-	})
-}
 
 //character update!
-async function updateChar(pCharacter, pSkin, color, charID, direction) {
+async function updateChar(charInfo, pNum) {
 
 	//store so code looks cleaner later
-	const charEL = document.getElementById(charID);
+	const charEL = pChar[pNum];
+	const trailEL = pTrail[pNum];
 
-	//this will trigger whenever the image loaded cant be found
-	if (startup) {
-		//if the image fails to load, we will put a placeholder
-		charEL.addEventListener("error", () => {
-			if (direction == "Left") {
-				charEL.setAttribute('src', 'Resources/Characters/Renders/Random.png');
-			} else {
-				charEL.setAttribute('src', 'Resources/Characters/Renders/Random.png');
-			}
-		})
-	}
-
-	//change the image path depending on the character, skin and direction
-	charEL.setAttribute('src', 'Resources/Characters/Renders/' + pCharacter + '/' + pSkin + '.png');
-
-	//             x, y, scale
-	let charPos = [0, 0, 1];
-
-	if (charEL == document.getElementById("charP1")) {
-		charPos[0] = 223;
-	} else {
-		charPos[0] = 1185;
-	}
-	charPos[1] = 350;
-	charPos[2] = 1.88;
-
+	//change the image path depending on the character and skin
+	charEL.src = charInfo.charImg;
+	trailEL.src = charInfo.trailImg;
 
 	//to position the character
-	charEL.style.left = charPos[0] + "px";
-	charEL.style.top = charPos[1] + "px";
-	charEL.style.transform = "scale(" + charPos[2] + ")";
+	const charPos = charInfo.charPos;
+	charEL.style.transform = `translate(${charPos[0]}px, ${charPos[1]}px) scale(${charPos[2]})`;
+	trailEL.style.transform = `translate(${charPos[0]}px, ${charPos[1]}px) scale(${charPos[2]})`;
+
+	//to decide scalling
+	if (charInfo.charImg.includes("HD")) {
+		charEL.style.imageRendering = "auto"; // default scalling
+		trailEL.style.imageRendering = "auto";
+	} else {
+		charEL.style.imageRendering = "pixelated"; // pixel art scalling
+		trailEL.style.imageRendering = "pixelated";
+	}
+
+	// here we will store promises to use later
+	const charsLoaded = [];
+	//this will make the thing wait till the images are fully loaded
+	charsLoaded.push(charEL.decode(),
+		trailEL.decode().catch( () => {} ) // if no trail, do nothing
+	);
+	// this function will send a promise when the images finish loading
+	await Promise.all(charsLoaded);
+
+	return [pChara[pNum], trailEL];
+
+}
+
+//this gets called just to change the color of a trail
+function colorTrail(trailEL, char) {
+	trailEL.src = char.vs.trailImg;
 }
