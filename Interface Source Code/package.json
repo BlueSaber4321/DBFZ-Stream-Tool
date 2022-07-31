@@ -1,10 +1,10 @@
 {
   "name": "dbfz-st-gui",
-  "version": "0.0.1",
+  "version": "0.1",
   "description": "An electron interface for DBFZ tournament streams.",
   "main": "index.js",
   "repository": "https://github.com/BlueSaber4321/DBFZ-Stream-Tool",
-  "author": "BlueSaber",
+  "author": "BlueSaber4321",
   "license": "MIT",
   "devDependencies": {
     "electron": "^18.0.3",
@@ -15,7 +15,7 @@
     "dist": "electron-builder"
   },
   "build": {
-    "appId": "roa.st.gui",
+    "appId": "dbfz.st.gui",
     "linux": {
       "target": "AppImage"
     },
